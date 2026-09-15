@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Gestão de Ordens de Serviço (OS)</title>
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- PapaParse para leitura do Google Sheets (CSV) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <!-- Google Fonts & Font Awesome Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0b132b 0%, #1c2541 50%, #0d1b2a 100%);
+            --card-bg: rgba(255, 255, 255, 0.06);
+            --card-border: rgba(255, 255, 255, 0.12);
+            --card-hover: rgba(255, 255, 255, 0.1);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --accent-blue: #38bdf8;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-yellow: #f59e0b;
+            --accent-red: #ef4444;
+            --accent-purple: #a855f7;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .dashboard-container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #ffffff;
+        }
+
+        header h1 i {
+            color: var(--accent-blue);
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-top: 4px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .sync-btn {
+            background: rgba(56, 189, 248, 0.2);
+            color: var(--accent-blue);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .sync-btn:hover {
+            background: rgba(56, 189, 248, 0.4);
+        }
+
+        .filter-section {
+            display: flex;
+            gap: 1.5rem;
+            background: var(--card-bg);
+            padding: 1.25rem;
+            border-radius: 12px;
+            border: 1px solid var(--card-border);
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-group label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-group select {
+            background: #1e293b;
+            color: #ffffff;
+            border: 1px solid var(--card-border);
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
+            outline: none;
+            font-size: 0.95rem;
+        }
+
+        .reset-btn {
+            align-self: flex-end;
+            padding: 0.6rem 1.2rem;
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .reset-btn:hover {
+            background: rgba(239, 68, 68, 0.4);
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .kpi-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-3px);
+            background: var(--card-hover);
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent-blue);
+        }
+
+        .kpi-card.yellow::before { background: var(--accent-yellow); }
+        .kpi-card.red::before { background: var(--accent-red); }
+        .kpi-card.green::before { background: var(--accent-green); }
+        .kpi-card.purple::before { background: var(--accent-purple); }
+
+        .kpi-title {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .kpi-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin: 0.5rem 0;
+            color: #ffffff;
+        }
+
+        .kpi-subtext {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 1024px) {
+            .charts-grid { grid-template-columns: 1fr; }
+        }
+
+        .chart-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-card.full-width { grid-column: span 2; }
+
+        @media (max-width: 1024px) {
+            .chart-card.full-width { grid-column: span 1; }
+        }
+
+        .chart-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chart-container {
+            position: relative;
+            flex: 1;
+            min-height: 280px;
+        }
+
+        .table-section {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            overflow-x: auto;
+        }
+
+        .table-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: rgba(15, 23, 42, 0.8);
+            padding: 0.8rem 1rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        td {
+            padding: 0.8rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+        }
+
+        tr:hover td { background: rgba(255, 255, 255, 0.03); }
+
+        .badge {
+            padding: 0.25rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .badge-danger { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+        .badge-warning { background: rgba(245, 158, 11, 0.2); color: #fde047; }
+        .badge-success { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+    <header>
+        <div>
+            <h1><i class="fa-solid fa-chart-line"></i> Painel de Operações & Manutenção</h1>
+            <div class="subtitle" id="status-sync">Sincronizado via Google Sheets</div>
+        </div>
+        <div class="header-actions">
+            <button class="sync-btn" id="btn-sync">
+                <i class="fa-solid fa-arrows-rotate"></i> Sincronizar Agora
+            </button>
+        </div>
+    </header>
+
+    <div class="filter-section">
+        <div class="filter-group">
+            <label for="filter-grupo"><i class="fa-solid fa-filter"></i> Grupo de Trabalho</label>
+            <select id="filter-grupo">
+                <option value="ALL">Todos os Grupos</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="filter-status"><i class="fa-solid fa-user-check"></i> Status do Colaborador</label>
+            <select id="filter-status">
+                <option value="ALL">Todos</option>
+                <option value="Ativo" selected>Apenas Ativos</option>
+                <option value="Férias">Apenas em Férias</option>
+            </select>
+        </div>
+
+        <button class="reset-btn" id="btn-reset">
+            <i class="fa-solid fa-rotate-left"></i> Limpar Filtros
+        </button>
+    </div>
+
+    <div class="kpi-grid">
+        <div class="kpi-card red">
+            <div class="kpi-title">OSs Corretivas</div>
+            <div class="kpi-value" id="kpi-corretivas">0</div>
+            <div class="kpi-subtext">Manutenção Reativa</div>
+        </div>
+        <div class="kpi-card yellow">
+            <div class="kpi-title">OSs Preventivas</div>
+            <div class="kpi-value" id="kpi-preventivas">0</div>
+            <div class="kpi-subtext">Manutenções Programadas</div>
+        </div>
+        <div class="kpi-card purple">
+            <div class="kpi-title">OSs Em Compra</div>
+            <div class="kpi-value" id="kpi-compras">0</div>
+            <div class="kpi-subtext">Aguardando Suprimentos</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Horas Trabalhadas</div>
+            <div class="kpi-value" id="kpi-horas">0h</div>
+            <div class="kpi-subtext">Registradas na Base</div>
+        </div>
+        <div class="kpi-card green">
+            <div class="kpi-title">Utilização da Meta (%)</div>
+            <div class="kpi-value" id="kpi-eficiencia">0%</div>
+            <div class="kpi-subtext">Aproveitamento da Meta</div>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <div class="chart-card">
+            <div class="chart-title"><i class="fa-solid fa-chart-pie"></i> Proporção de OSs por Tipo</div>
+            <div class="chart-container">
+                <canvas id="chartTipoOs"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <div class="chart-title"><i class="fa-solid fa-chart-bar"></i> OSs Pendentes por Grupo</div>
+            <div class="chart-container">
+                <canvas id="chartSetores"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card full-width">
+            <div class="chart-title"><i class="fa-solid fa-user-clock"></i> Horas Trabalhadas vs. Meta por Colaborador</div>
+            <div class="chart-container">
+                <canvas id="chartHorasColaborador"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-section">
+        <div class="table-title"><i class="fa-solid fa-table"></i> Detalhamento por Colaborador</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Colaborador</th>
+                    <th>Grupo de Trabalho</th>
+                    <th>Corretivas</th>
+                    <th>Preventivas</th>
+                    <th>Em Compra</th>
+                    <th>Total OSs</th>
+                    <th>Horas Trab.</th>
+                    <th>Meta Horas</th>
+                    <th>Aproveitamento</th>
+                </tr>
+            </thead>
+            <tbody id="table-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTdkiIFJ_Zgizg0RHZbqMN4VZUK3Ej5OBu_SBIF6bdvLDoZzxdPHDcns6m4FOQMS4FRN0AsrlP8AiaG/pub?gid=999748096&single=true&output=csv";
+
+    let rawData = [];
+    let chartTipo, chartSetor, chartHoras;
+
+    function init() {
+        document.getElementById('btn-sync').addEventListener('click', loadData);
+        document.getElementById('filter-grupo').addEventListener('change', render);
+        document.getElementById('filter-status').addEventListener('change', render);
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            document.getElementById('filter-grupo').value = 'ALL';
+            document.getElementById('filter-status').value = 'Ativo';
+            render();
+        });
+
+        loadData();
+    }
+
+    function getVal(row, keys) {
+        for (let key of keys) {
+            const foundKey = Object.keys(row).find(k => k.trim().toLowerCase() === key.toLowerCase());
+            if (foundKey && row[foundKey] !== undefined) return row[foundKey];
+        }
+        return '';
+    }
+
+    function loadData() {
+        const statusEl = document.getElementById('status-sync');
+        statusEl.innerText = "Carregando dados da planilha...";
+
+        Papa.parse(SHEET_CSV_URL, {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                if (!results.data || results.data.length === 0) {
+                    statusEl.innerText = "Aviso: Planilha vazia ou sem dados válidos.";
+                    return;
+                }
+
+                rawData = results.data.map(row => {
+                    const nome = getVal(row, ['nome', 'colaborador', 'funcionario']);
+                    const grupo = getVal(row, ['grupo', 'setor', 'equipe', 'grupo de trabalho']) || 'Geral';
+                    const corretivas = parseInt(getVal(row, ['corretivas', 'corretiva', 'os corretivas'])) || 0;
+                    const preventivas = parseInt(getVal(row, ['preventivas', 'preventiva', 'os preventivas'])) || 0;
+                    const compras = parseInt(getVal(row, ['compras', 'em compra', 'compra'])) || 0;
+                    const horas = parseFloat(getVal(row, ['horas', 'horas trabalhadas', 'hrs'])) || 0;
+                    const meta = parseFloat(getVal(row, ['meta', 'meta horas', 'meta de horas'])) || 0;
+                    const statusText = getVal(row, ['ferias', 'status', 'situacao']).toString().toLowerCase();
+                    const ferias = statusText === 'true' || statusText.includes('férias') || statusText.includes('ferias');
+
+                    return { nome, grupo, corretivas, preventivas, compras, horas, meta, ferias };
+                }).filter(item => item.nome !== '');
+
+                statusEl.innerText = "Sincronizado com sucesso (" + new Date().toLocaleTimeString() + ")";
+                populateGroupFilter();
+                render();
+            },
+            error: function(err) {
+                statusEl.innerText = "Erro ao carregar dados. Verifique o servidor local/CORS.";
+                console.error("Erro na leitura do PapaParse:", err);
+            }
+        });
+    }
+
+    function populateGroupFilter() {
+        const select = document.getElementById('filter-grupo');
+        const grupos = [...new Set(rawData.map(item => item.grupo))];
+        select.innerHTML = '<option value="ALL">Todos os Grupos</option>';
+        grupos.forEach(g => {
+            select.innerHTML += `<option value="${g}">${g}</option>`;
+        });
+    }
+
+    function getFilteredData() {
+        const grupo = document.getElementById('filter-grupo').value;
+        const status = document.getElementById('filter-status').value;
+
+        return rawData.filter(item => {
+            const matchGrupo = (grupo === 'ALL' || item.grupo === grupo);
+            let matchStatus = true;
+            if (status === 'Ativo') matchStatus = !item.ferias;
+            if (status === 'Férias') matchStatus = item.ferias;
+            return matchGrupo && matchStatus;
+        });
+    }
+
+    function render() {
+        const data = getFilteredData();
+
+        const totalCorretivas = data.reduce((acc, i) => acc + i.corretivas, 0);
+        const totalPreventivas = data.reduce((acc, i) => acc + i.preventivas, 0);
+        const totalCompras = data.reduce((acc, i) => acc + i.compras, 0);
+        const totalHoras = data.reduce((acc, i) => acc + i.horas, 0);
+        const totalMeta = data.reduce((acc, i) => acc + i.meta, 0);
+        const eficietPercentage = totalMeta > 0 ? ((totalHoras / totalMeta) * 100).toFixed(1) : 0;
+
+        document.getElementById('kpi-corretivas').innerText = totalCorretivas;
+        document.getElementById('kpi-preventivas').innerText = totalPreventivas;
+        document.getElementById('kpi-compras').innerText = totalCompras;
+        document.getElementById('kpi-horas').innerText = `${totalHoras}h`;
+        document.getElementById('kpi-eficiencia').innerText = `${eficietPercentage}%`;
+
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = '';
+        data.forEach(row => {
+            const totalOS = row.corretivas + row.preventivas + row.compras;
+            const pct = row.meta > 0 ? ((row.horas / row.meta) * 100).toFixed(0) : 0;
+            const badgeClass = pct >= 80 ? 'badge-success' : pct >= 50 ? 'badge-warning' : 'badge-danger';
+
+            tbody.innerHTML += `
+                <tr>
+                    <td><strong>${row.nome}</strong></td>
+                    <td>${row.grupo}</td>
+                    <td>${row.corretivas}</td>
+                    <td>${row.preventivas}</td>
+                    <td>${row.compras}</td>
+                    <td>${totalOS}</td>
+                    <td>${row.horas}h</td>
+                    <td>${row.meta}h</td>
+                    <td><span class="badge ${badgeClass}">${pct}%</span></td>
+                </tr>
+            `;
+        });
+
+        renderCharts(data, totalCorretivas, totalPreventivas, totalCompras);
+    }
+
+    function renderCharts(data, c, p, comp) {
+        if (chartTipo) chartTipo.destroy();
+        if (chartSetor) chartSetor.destroy();
+        if (chartHoras) chartHoras.destroy();
+
+        chartTipo = new Chart(document.getElementById('chartTipoOs'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Corretivas', 'Preventivas', 'Em Compra'],
+                datasets: [{
+                    data: [c, p, comp],
+                    backgroundColor: ['#ef4444', '#f59e0b', '#a855f7']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        const gruposMap = {};
+        data.forEach(i => {
+            gruposMap[i.grupo] = (gruposMap[i.grupo] || 0) + i.corretivas + i.preventivas + i.compras;
+        });
+
+        chartSetor = new Chart(document.getElementById('chartSetores'), {
+            type: 'bar',
+            data: {
+                labels: Object.keys(gruposMap),
+                datasets: [{
+                    label: 'Total de OSs',
+                    data: Object.values(gruposMap),
+                    backgroundColor: '#38bdf8'
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        chartHoras = new Chart(document.getElementById('chartHorasColaborador'), {
+            type: 'bar',
+            data: {
+                labels: data.map(i => i.nome),
+                datasets: [
+                    { label: 'Horas Trabalhadas', data: data.map(i => i.horas), backgroundColor: '#10b981' },
+                    { label: 'Meta de Horas', data: data.map(i => i.meta), backgroundColor: 'rgba(255,255,255,0.2)' }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    window.onload = init;
+</script>
+</body>
+</html>
